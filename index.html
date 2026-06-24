@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Bolten</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto; background: #F9FAFB; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      const [opportunities, setOpportunities] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const SUPABASE_URL = 'https://feznqwdgyzveywmuzzmy.supabase.co';
+      const SUPABASE_KEY = 'sb_publishable_oVuV5-yszCkkY_bsh4b74w_ygfhh_YvLfJHDPMjILdNYAz8jjQQUVYEaGpdBMiZvCnNYdYfH';
+
+      useEffect(() => {
+        fetch(`${SUPABASE_URL}/rest/v1/opportunities`, {
+          headers: { 'apikey': SUPABASE_KEY }
+        })
+          .then(r => r.json())
+          .then(d => { setOpportunities(d || []); setLoading(false); })
+          .catch(() => setLoading(false));
+
+        const interval = setInterval(() => {
+          fetch(`${SUPABASE_URL}/rest/v1/opportunities`, {
+            headers: { 'apikey': SUPABASE_KEY }
+          }).then(r => r.json()).then(d => setOpportunities(d || []));
+        }, 30000);
+
+        return () => clearInterval(interval);
+      }, []);
+
+      const wonOpp = opportunities.filter(o => o.status === 'Done' || o.status === 'Ganho').length;
+      const lostOpp = opportunities.filter(o => o.status === 'Perdido').length;
+      const totalValue = opportunities.reduce((sum, o) => sum + (parseFloat(o.value) || 0), 0);
+
+      if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Carregando...</div>;
+
+      return (
+        <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+          <h1>Dashboard Bolten</h1>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ background: '#F0F9FF', padding: '1rem', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', color: '#0369A1' }}>Total</p>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#0369A1' }}>{opportunities.length}</p>
+            </div>
+            <div style={{ background: '#ECFDF5', padding: '1rem', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', color: '#047857' }}>Ganhas</p>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#047857' }}>{wonOpp}</p>
+            </div>
+            <div style={{ background: '#FEF2F2', padding: '1rem', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', color: '#991B1B' }}>Perdidas</p>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#991B1B' }}>{lostOpp}</p>
+            </div>
+            <div style={{ background: '#FEF3C7', padding: '1rem', borderRadius: '8px' }}>
+              <p style={{ fontSize: '12px', color: '#92400E' }}>Valor</p>
+              <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#92400E' }}>R$ {totalValue.toFixed(0)}</p>
+            </div>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #E5E7EB' }}>
+                <th style={{ textAlign: 'left', padding: '12px' }}>Nome</th>
+                <th style={{ textAlign: 'left', padding: '12px' }}>Email</th>
+                <th style={{ textAlign: 'left', padding: '12px' }}>Status</th>
+                <th style={{ textAlign: 'right', padding: '12px' }}>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {opportunities.slice(-10).reverse().map((opp, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #E5E7EB' }}>
+                  <td style={{ padding: '12px' }}>{opp.name || '-'}</td>
+                  <td style={{ padding: '12px' }}>{opp.email || '-'}</td>
+                  <td style={{ padding: '12px' }}>
+                    <span style={{ padding: '4px 12px', borderRadius: '4px', background: opp.status === 'Done' ? '#DCFCE7' : '#FEF3C7', color: opp.status === 'Done' ? '#047857' : '#92400E' }}>
+                      {opp.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px', textAlign: 'right' }}>R$ {(parseFloat(opp.value) || 0).toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
