@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect, useRef } from 'react';
+import Chart from 'chart.js/auto';
 
-export default function DashboardBolten() {
+export default function App() {
   const [opportunities, setOpportunities] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const chartRefPie = useRef(null);
+  const chartRefBar = useRef(null);
+  const chartPieInstance = useRef(null);
+  const chartBarInstance = useRef(null);
 
-  // Configuração Supabase
   const SUPABASE_URL = 'https://feznqwdgyzveywmuzzmy.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_oVuV5-yszCkkY_bsh4b74w_ygfhh_YvLfJHDPMjILdNYAz8jjQQUVYEaGpdBMiZvCnNYdYfH';
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch opportunities
         const oppRes = await fetch(
           `${SUPABASE_URL}/rest/v1/opportunities?select=*`,
           {
@@ -27,7 +29,6 @@ export default function DashboardBolten() {
         const oppData = await oppRes.json();
         setOpportunities(oppData || []);
 
-        // Fetch contacts
         const contactRes = await fetch(
           `${SUPABASE_URL}/rest/v1/contacts?select=*`,
           {
@@ -48,37 +49,111 @@ export default function DashboardBolten() {
     };
 
     fetchData();
-    // Atualiza a cada 30 segundos
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Processamento de dados
+  // Atualizar gráficos quando dados mudam
+  useEffect(() => {
+    if (opportunities.length > 0 && chartRefPie.current) {
+      updateCharts();
+    }
+  }, [opportunities]);
+
+  const updateCharts = () => {
+    const totalOpp = opportunities.length;
+    const wonOpp = opportunities.filter(o => o.status === 'Done' || o.status === 'Ganho').length;
+    const lostOpp = opportunities.filter(o => o.status === 'Perdido').length;
+    const inProgress = totalOpp - wonOpp - lostOpp;
+
+    // Gráfico Pie
+    if (chartPieInstance.current) {
+      chartPieInstance.current.destroy();
+    }
+    
+    if (chartRefPie.current) {
+      const ctx = chartRefPie.current.getContext('2d');
+      chartPieInstance.current = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Ganhas', 'Perdidas', 'Em progresso'],
+          datasets: [{
+            data: [wonOpp, lostOpp, inProgress],
+            backgroundColor: ['#10B981', '#EF4444', '#F59E0B'],
+            borderColor: ['#10B981', '#EF4444', '#F59E0B'],
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+
+    // Gráfico Bar - últimas oportunidades
+    if (chartBarInstance.current) {
+      chartBarInstance.current.destroy();
+    }
+
+    const lastOpp = opportunities
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 7)
+      .reverse();
+
+    if (chartRefBar.current) {
+      const ctx = chartRefBar.current.getContext('2d');
+      chartBarInstance.current = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: lastOpp.map((_, i) => `Opp ${i + 1}`),
+          datasets: [{
+            label: 'Valor (R$)',
+            data: lastOpp.map(o => parseFloat(o.value) || 0),
+            backgroundColor: '#3B82F6',
+            borderColor: '#3B82F6',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return 'R$ ' + value.toFixed(0);
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  };
+
   const totalOpp = opportunities.length;
   const wonOpp = opportunities.filter(o => o.status === 'Done' || o.status === 'Ganho').length;
   const lostOpp = opportunities.filter(o => o.status === 'Perdido').length;
   const totalValue = opportunities.reduce((sum, o) => sum + (parseFloat(o.value) || 0), 0);
   const totalContacts = contacts.length;
-
-  const oppByStatus = [
-    { name: 'Ganhas', value: wonOpp, fill: '#10B981' },
-    { name: 'Perdidas', value: lostOpp, fill: '#EF4444' },
-    { name: 'Em progresso', value: totalOpp - wonOpp - lostOpp, fill: '#F59E0B' }
-  ];
-
-  const timelineData = opportunities
-    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    .slice(-7)
-    .map((o, i) => ({
-      name: `Opp ${i + 1}`,
-      value: parseFloat(o.value) || 0,
-      status: o.status
-    }));
+  const conversionRate = totalOpp > 0 ? Math.round((wonOpp / totalOpp) * 100) : 0;
 
   if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Carregando dados...</div>;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto' }}>
+    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto', background: '#F9FAFB', minHeight: '100vh' }}>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, marginBottom: '0.5rem' }}>Dashboard Bolten</h1>
         <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Acompanhe seus resultados em tempo real</p>
@@ -108,44 +183,31 @@ export default function DashboardBolten() {
         </div>
         <div style={{ background: '#F5F3FF', padding: '1.5rem', borderRadius: '8px', border: '1px solid #EDE9FE' }}>
           <p style={{ margin: '0 0 0.5rem 0', fontSize: '12px', color: '#5B21B6', fontWeight: 500 }}>Taxa de Conversão</p>
-          <p style={{ margin: 0, fontSize: '32px', fontWeight: 600, color: '#5B21B6' }}>{totalOpp > 0 ? Math.round((wonOpp / totalOpp) * 100) : 0}%</p>
+          <p style={{ margin: 0, fontSize: '32px', fontWeight: 600, color: '#5B21B6' }}>{conversionRate}%</p>
         </div>
       </div>
 
       {/* Gráficos */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem' }}>
-        {/* Funil - Pie Chart */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
+        {/* Gráfico Pie */}
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
           <h2 style={{ margin: '0 0 1rem 0', fontSize: '16px', fontWeight: 600 }}>Oportunidades por Status</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={oppByStatus} cx="50%" cy="50%" labelLine={false} label={({ name, value }) => `${name}: ${value}`} outerRadius={100} fill="#8884d8" dataKey="value">
-                {oppByStatus.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <div style={{ position: 'relative', height: '300px' }}>
+            <canvas ref={chartRefPie}></canvas>
+          </div>
         </div>
 
-        {/* Timeline */}
+        {/* Gráfico Bar */}
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
           <h2 style={{ margin: '0 0 1rem 0', fontSize: '16px', fontWeight: 600 }}>Últimas Oportunidades (Valor)</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={timelineData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip formatter={(value) => `R$ ${value.toFixed(0)}`} />
-              <Bar dataKey="value" fill="#3B82F6" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div style={{ position: 'relative', height: '300px' }}>
+            <canvas ref={chartRefBar}></canvas>
+          </div>
         </div>
       </div>
 
       {/* Tabela de Oportunidades */}
-      <div style={{ marginTop: '2rem', background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid #E5E7EB' }}>
+      <div style={{ background: 'white', padding: '1.5rem', borderRadius: '8px', border: '1px solid #E5E7EB', marginBottom: '2rem' }}>
         <h2 style={{ margin: '0 0 1rem 0', fontSize: '16px', fontWeight: 600 }}>Oportunidades Recentes</h2>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
